@@ -25,15 +25,7 @@ repositories {
     maven { url "https://repo.grails.org/grails/core" }
 }
 
-configurations {
-    developmentOnly
-    runtimeClasspath {
-        extendsFrom developmentOnly
-    }
-}
-
 dependencies {
-    developmentOnly("org.springframework.boot:spring-boot-devtools")
     compileOnly "io.micronaut:micronaut-inject-groovy"
     console "org.grails:grails-console"
     implementation "org.springframework.boot:spring-boot-starter-logging"
@@ -41,7 +33,6 @@ dependencies {
     implementation "org.springframework.boot:spring-boot-autoconfigure"
     implementation "org.grails:grails-core"
     implementation "org.springframework.boot:spring-boot-starter-actuator"
-    implementation "org.springframework.boot:spring-boot-starter-tomcat"
     implementation "org.grails:grails-web-boot"
     implementation "org.grails:grails-logging"
     implementation "org.grails:grails-plugin-rest"
@@ -63,6 +54,7 @@ dependencies {
     runtimeOnly "org.apache.tomcat:tomcat-jdbc"
     runtimeOnly "javax.xml.bind:jaxb-api:2.3.1"
     runtimeOnly "com.bertramlabs.plugins:asset-pipeline-grails:3.3.4"
+    testImplementation "org.springframework.boot:spring-boot-starter-tomcat"
     testImplementation "io.micronaut:micronaut-inject-groovy"
     testImplementation "org.grails:grails-gorm-testing-support"
     testImplementation "org.mockito:mockito-core"
