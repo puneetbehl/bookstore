@@ -1,4 +1,4 @@
-# bookstore - Grails 5.1.2-SNAPSHOT - Web Application Example
+# Grails 5.1.2-SNAPSHOT - Web Application Example
 
 A sample Grails 5.1.2 application with example Dockerfile to deploy over standalone tomcat.
 
