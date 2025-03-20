@@ -8,6 +8,9 @@ plugins {
     id "com.bertramlabs.asset-pipeline"
     id "application"
     id "eclipse"
+    id "jacoco"
+    id "codenarc"
+    id "org.sonarqube" version "6.0.1.5171"
 }
 
 group = "example"
@@ -65,6 +68,9 @@ dependencies {
     testRuntimeOnly("org.seleniumhq.selenium:selenium-safari-driver:4.19.1")
     testImplementation("io.micronaut:micronaut-http-client")
 
+    codenarc('org.codenarc:CodeNarc:3.6.0')
+    codenarc('org.codehaus.groovy:groovy-all:3.0.23')
+
 }
 
 application {
@@ -90,4 +96,34 @@ webdriverBinaries {
 assets {
     minifyJs = true
     minifyCss = true
+}
+
+jacocoTestReport {
+    // Include coverage data from unit tests, integration tests, and REST Assured tests
+    executionData(fileTree(project.rootDir.absolutePath).include("**/*.exec"))
+
+    reports {
+        xml.enabled true
+        html.enabled true
+        csv.enabled true
+    }
+}
+
+codenarc {
+    version = ""
+    reportFormat = 'xml'
+    configFile = file('config/codenarc/StarterRuleSet-AllRulesByCategory.groovy')
+//    configFile = file('config/codenarc/DryRuleSet.groovy')
+}
+
+sonar {
+    properties {
+        property "sonar.projectKey", "core-platform"
+        property "sonar.host.url", "http://localhost:9000"
+        property "sonar.login", "sqp_52e2f59fd947aedaa8cc64624a86fbcb4d6173cf"
+        property "sonar.language", "java,groovy"
+        property "sonar.exclusions", "**/generated/**, **/*.gsp"
+        property "sonar.coverage.jacoco.xmlReportPaths", "$buildDir/reports/jacoco/test/jacocoTestReport.xml"
+        property "sonar.codenarc.reportPaths", "$buildDir/reports/main.html"
+    }
 }
