@@ -1,5 +1,7 @@
 package example
 
+import java.util.Date
+
 class ComplexService {
 
     def processOrder(CustomerOrder customerOrder) {
