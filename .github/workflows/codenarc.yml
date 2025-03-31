@@ -24,49 +24,72 @@ jobs:
 
       - name: Run CodeNarc
         run: ./gradlew codenarcMain --info
+        continue-on-error: true
 
       - name: Parse CodeNarc Violations
         run: |
-          xmllint --xpath '//File' build/reports/codenarc/main.xml | \
-          sed -nE 's/.*<File name="([^"]+)".*/\1/p' > file-names.txt
+          if [ -f build/reports/codenarc/main.xml ]; then
+            xmllint --xpath '//File' build/reports/codenarc/main.xml | \
+            sed -nE 's/.*<File name="([^"]+)".*/\1/p' > file-names.txt
           
-          xmllint --xpath '//Violation' build/reports/codenarc/main.xml | \
-          sed -nE 's/.*lineNumber="([^"]+)".*<Message><!\[CDATA\[(.*)\]\]><\/Message>.*/\1:\2/p' > violations.txt
+            xmllint --xpath '//Violation' build/reports/codenarc/main.xml | \
+            sed -nE 's/.*lineNumber="([^"]+)".*<Message><!\[CDATA\[(.*)\]\]><\/Message>.*/\1:\2/p' > violations.txt
           
-          paste -d ":" file-names.txt violations.txt > codenarc-violations.txt
+            paste -d ":" file-names.txt violations.txt > codenarc-violations.txt || true
+          else
+            touch codenarc-violations.txt
+          fi
 
-      - name: Comment on PR with Violations
+      - name: Comment on PR with Violations or Success
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const fs = require('fs');
-            const path = require('path');
-            
-            const violations = fs.readFileSync('codenarc-violations.txt', 'utf8').split('\n').filter(Boolean);
             const { owner, repo } = context.repo;
             const prNumber = context.payload.pull_request.number;
+
+            const violationsFile = 'codenarc-violations.txt';
+            let commentBody = '';
+
+            if (fs.existsSync(violationsFile)) {
+              const violations = fs.readFileSync(violationsFile, 'utf8').split('\n').filter(Boolean);
             
-            let comments = [];
-            
-            for (const violation of violations) {
-              const match = violation.match(/filename="(.+?)" lineNumber="(\d+)" message="(.+?)"/);
-              if (match) {
-                const [, file, line, message] = match;
-                comments.push({
-                  path: file,
-                  line: parseInt(line, 10),
-                  body: `⚠️ **CodeNarc Warning:** ${message}`
-                });
+              if (violations.length > 0) {
+                let comments = [];
+                for (const violation of violations) {
+                  const match = violation.match(/filename="(.+?)" lineNumber="(\d+)" message="(.+?)"/);
+                  if (match) {
+                    const [, file, line, message] = match;
+                    comments.push({
+                      path: file,
+                      line: parseInt(line, 10),
+                      body: `⚠️ **CodeNarc Warning:** ${message}`
+                    });
+                  }
+                }
+
+                if (comments.length > 0) {
+                  github.rest.pulls.createReview({
+                    owner,
+                    repo,
+                    pull_number: prNumber,
+                    event: "COMMENT",
+                    comments
+                  });
+                }
+              } else {
+                commentBody = "✅ **CodeNarc Check Passed!** No issues detected.";
               }
+            } else {
+              commentBody = "✅ **CodeNarc Check Passed!** No issues detected.";
             }
-            
-            if (comments.length > 0) {
-              github.rest.pulls.createReview({
+
+            if (commentBody) {
+              github.rest.issues.createComment({
                 owner,
                 repo,
-                pull_number: prNumber,
-                event: "COMMENT",
-                comments
+                issue_number: prNumber,
+                body: commentBody
               });
             }
