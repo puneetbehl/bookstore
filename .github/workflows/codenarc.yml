@@ -25,12 +25,32 @@ jobs:
       - name: Install xmllint
         run: sudo apt-get update && sudo apt-get install -y libxml2-utils
 
-      - name: Run CodeNarc
-        run: ./gradlew codenarcMain --info
+      - name: Get Changed Groovy Files
+        id: changed_files
+        uses: tj-actions/changed-files@v44
+        with:
+          files: '**/*.groovy'
+
+      - name: Check if Groovy Files Changed
+        id: check_files
+        run: |
+          if [[ -z "${{ steps.changed_files.outputs.all_changed_files }}" ]]; then
+            echo "No Groovy files changed, skipping CodeNarc."
+            echo "skip=true" >> $GITHUB_ENV
+          else
+            echo "skip=false" >> $GITHUB_ENV
+            echo "${{ steps.changed_files.outputs.all_changed_files }}" > changed_files.txt
+          fi
+
+      - name: Run CodeNarc on Changed Files
+        if: env.skip != 'true'
+        run: |
+          ./gradlew codenarcMain --include "$(cat changed_files.txt | tr '\n' ',')"
         continue-on-error: true
 
       - name: Parse CodeNarc Violations
         id: parse_violations
+        if: env.skip != 'true'
         run: |
           if [ -f build/reports/codenarc/main.xml ]; then
             xmllint --xpath '//File' build/reports/codenarc/main.xml | \
@@ -44,8 +64,11 @@ jobs:
             touch codenarc-violations.txt
           fi
 
+          # Filter violations to only include changed files
+          grep -Ff changed_files.txt codenarc-violations.txt > filtered-violations.txt || true
+
           # Store violations content as output
-          violations_content=$(cat codenarc-violations.txt | base64 -w 0 || echo "")
+          violations_content=$(cat filtered-violations.txt | base64 -w 0 || echo "")
           echo "violations-content=${violations_content}" >> "$GITHUB_ENV"
 
       - name: Comment on PR with Violations or Success
@@ -55,12 +78,9 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const fs = require('fs');
             const { owner, repo } = context.repo;
             const prNumber = context.payload.pull_request.number;
-
             const violations = Buffer.from(process.env.VIOLATIONS, 'base64').toString('utf8').split('\n').filter(Boolean);
-            let commentBody = '';
 
             if (violations.length > 0) {
               let comments = [];
@@ -69,6 +89,7 @@ jobs:
                 if (parts.length >= 3) {
                   const [file, line, ...messageParts] = parts;
                   const message = messageParts.join(":").trim();
+
                   comments.push({
                     path: file,
                     line: parseInt(line, 10),
@@ -87,14 +108,10 @@ jobs:
                 });
               }
             } else {
-              commentBody = "✅ **CodeNarc Check Passed!** No issues detected.";
-            }
-
-            if (commentBody) {
               github.rest.issues.createComment({
                 owner,
                 repo,
                 issue_number: prNumber,
-                body: commentBody
+                body: "✅ **CodeNarc Check Passed!** No issues detected."
               });
             }
