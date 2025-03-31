@@ -7,12 +7,13 @@ class Customer {
     String firstName
     String lastName
     String email
+    Boolean premiumMember = false // Added this field to match service logic
 
     static hasMany = [orders: CustomerOrder]
 
     static constraints = {
-        firstName blank: false, maxSize: 100
-        lastName blank: false, maxSize: 100
-        email blank: false, email: true, unique: true
+        firstName blank: false
+        lastName blank: false
+        email email: true, blank: false
     }
 }

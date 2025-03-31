@@ -1,13 +1,11 @@
 package example
 
 class OrderItem {
-    Book book
-    CustomerOrder customerOrder
-    Integer quantity
+    int quantity
+
+    static belongsTo = [book: Book, order: CustomerOrder]
 
     static constraints = {
-        book nullable: false
-        customerOrder nullable: false
         quantity min: 1
     }
 }

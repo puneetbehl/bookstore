@@ -1,0 +1,72 @@
+name: CodeNarc Lint Check
+
+on:
+  pull_request:
+    branches:
+      - main
+      - develop
+
+jobs:
+  codenarc:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Run CodeNarc
+        run: ./gradlew codenarcMain --info
+
+      - name: Parse CodeNarc Violations
+        run: |
+          xmllint --xpath '//File' build/reports/codenarc/main.xml | \
+          sed -nE 's/.*<File name="([^"]+)".*/\1/p' > file-names.txt
+          
+          xmllint --xpath '//Violation' build/reports/codenarc/main.xml | \
+          sed -nE 's/.*lineNumber="([^"]+)".*<Message><!\[CDATA\[(.*)\]\]><\/Message>.*/\1:\2/p' > violations.txt
+          
+          paste -d ":" file-names.txt violations.txt > codenarc-violations.txt
+
+      - name: Comment on PR with Violations
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            
+            const violations = fs.readFileSync('codenarc-violations.txt', 'utf8').split('\n').filter(Boolean);
+            const { owner, repo } = context.repo;
+            const prNumber = context.payload.pull_request.number;
+            
+            let comments = [];
+            
+            for (const violation of violations) {
+              const match = violation.match(/filename="(.+?)" lineNumber="(\d+)" message="(.+?)"/);
+              if (match) {
+                const [, file, line, message] = match;
+                comments.push({
+                  path: file,
+                  line: parseInt(line, 10),
+                  body: `⚠️ **CodeNarc Warning:** ${message}`
+                });
+              }
+            }
+            
+            if (comments.length > 0) {
+              github.rest.pulls.createReview({
+                owner,
+                repo,
+                pull_number: prNumber,
+                event: "COMMENT",
+                comments
+              });
+            }

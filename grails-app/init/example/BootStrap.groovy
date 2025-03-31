@@ -60,15 +60,19 @@ class BootStrap {
         def customer = new Customer(
                 firstName: "John",
                 lastName: "Doe",
-                email: "johndoe@example.com"
+                email: "johndoe@example.com",
+                premiumMember: true,
+                loyaltyPoints: 120
         ).save(failOnError: true)
 
         def order = new CustomerOrder(
                 customer: customer,
-                totalPrice: book1.price + book2.price
+                totalPrice: book1.price + book2.price,
+                orderDate: LocalDate.now(),
+                shippingMethod: "EXPRESS"
         ).save(failOnError: true)
 
-        new OrderItem(book: book1, customerOrder: order, quantity: 1).save(failOnError: true)
-        new OrderItem(book: book2, customerOrder: order, quantity: 1).save(failOnError: true)
+        new OrderItem(book: book1, order: order, quantity: 1).save(failOnError: true)
+        new OrderItem(book: book2, order: order, quantity: 1).save(failOnError: true)
     }
 }

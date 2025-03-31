@@ -8,16 +8,17 @@ import java.time.LocalDate
 class Book {
     String title
     String isbn
-    Author author
-    Publisher publisher
     BigDecimal price
     LocalDate publishedDate
+    int stock
+
+    static belongsTo = [author: Author, publisher: Publisher]
 
     static constraints = {
-        title blank: false, maxSize: 255
-        isbn blank: false, unique: true, maxSize: 20
+        title blank: false
+        isbn blank: false, unique: true
         price min: 0.0
-        publishedDate nullable: true
+        publishedDate nullable: false
+        stock min: 0
     }
 }
-

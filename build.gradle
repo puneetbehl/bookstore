@@ -118,12 +118,26 @@ codenarc {
 
 sonar {
     properties {
-        property "sonar.projectKey", "core-platform"
+        property "sonar.projectKey", "bookstore"
         property "sonar.host.url", "http://localhost:9000"
-        property "sonar.login", "sqp_52e2f59fd947aedaa8cc64624a86fbcb4d6173cf"
+        property "sonar.token", "sqp_38741148645920b7eb58bd4e71529ad7fc1d89d9"
         property "sonar.language", "java,groovy"
         property "sonar.exclusions", "**/generated/**, **/*.gsp"
         property "sonar.coverage.jacoco.xmlReportPaths", "$buildDir/reports/jacoco/test/jacocoTestReport.xml"
-        property "sonar.codenarc.reportPaths", "$buildDir/reports/main.html"
+        property "sonar.codenarc.reportPaths", "$buildDir/reports/codenarc/main.xml"
+        property "sonar.groovy.codenarc.reportPaths", "$buildDir/reports/codenarc/main.xml,$buildDir/reports/codenarc/integrationTest.xml"
+        property "sonar.groovy.file.suffixes", ".groovy"
     }
+}
+
+tasks.named('codenarcMain') {
+    mustRunAfter compileGroovy
+}
+
+codenarcMain {
+    compilationClasspath = sourceSets.main.compileClasspath + sourceSets.main.output
+}
+
+codenarcTest {
+    compilationClasspath = codenarcMain.compilationClasspath + sourceSets.test.compileClasspath + sourceSets.test.output
 }

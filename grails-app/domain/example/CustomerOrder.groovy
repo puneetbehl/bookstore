@@ -6,14 +6,19 @@ import java.time.LocalDate
 
 @Resource(uri = '/orders')
 class CustomerOrder {
-    LocalDate orderDate = LocalDate.now()
     BigDecimal totalPrice
+    BigDecimal finalPrice
+    LocalDate orderDate = LocalDate.now()
+    String status
+    String shippingMethod // Added field to match ComplexService logic
 
-    static hasMany = [orderItems: OrderItem]
     static belongsTo = [customer: Customer]
+    static hasMany = [orderItems: OrderItem]
 
     static constraints = {
-        customer nullable: false
         totalPrice min: 0.0
+        finalPrice nullable: true
+        status blank: false, inList: ["PENDING", "PROCESSED", "SHIPPED"]
+        shippingMethod blank: false, inList: ["EXPRESS", "STANDARD", "ECONOMY"]
     }
 }
