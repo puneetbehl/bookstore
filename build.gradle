@@ -9,7 +9,7 @@ plugins {
     id "application"
     id "eclipse"
     id "jacoco"
-    id "codenarc"
+    id 'codenarc'
     id "org.sonarqube" version "6.0.1.5171"
 }
 
