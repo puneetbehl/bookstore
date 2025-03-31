@@ -12,6 +12,9 @@ jobs:
     permissions:
       pull-requests: write
 
+    outputs:
+      codenarc_report: ${{ steps.run_codenarc.outputs.codenarc_report }}
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -35,46 +38,62 @@ jobs:
         id: check_files
         run: |
           if [[ -z "${{ steps.changed_files.outputs.all_changed_files }}" ]]; then
-            echo "No Groovy files changed, skipping CodeNarc."
             echo "skip=true" >> $GITHUB_ENV
           else
             echo "skip=false" >> $GITHUB_ENV
-            echo "${{ steps.changed_files.outputs.all_changed_files }}" > changed_files.txt
           fi
 
-      - name: Run CodeNarc on Changed Files
-        if: env.skip != 'true'
+      - name: Debug Changed Files Before CodeNarc
         run: |
-          ./gradlew codenarcMain --include "$(cat changed_files.txt | tr '\n' ',')"
+          changed_files=$(echo "${{ steps.changed_files.outputs.all_changed_files }}" | tr ' ' ',')
+          echo "Files being analyzed: $changed_files"
+
+
+      - name: Run CodeNarc on Changed Files
+        id: run_codenarc
+        if: env.skip != 'true'
         continue-on-error: true
+        run: |
+          changed_files=$(echo "${{ steps.changed_files.outputs.all_changed_files }}" | tr ' ' ',')
+          ./gradlew codenarcMain -PcodenarcIncludeFiles="$changed_files" || echo "CodeNarc failed, continuing execution"
+          
+          if [ -f build/reports/codenarc/main.xml ]; then
+            codenarc_report=$(base64 -w 0 build/reports/codenarc/main.xml || echo "")
+            echo "codenarc_report=${codenarc_report}" >> $GITHUB_ENV
+            echo "codenarc_report=${codenarc_report}" >> $GITHUB_OUTPUT
+          else
+            echo "codenarc_report=" >> $GITHUB_ENV
+            echo "codenarc_report=" >> $GITHUB_OUTPUT
+          fi
 
       - name: Parse CodeNarc Violations
         id: parse_violations
         if: env.skip != 'true'
         run: |
-          if [ -f build/reports/codenarc/main.xml ]; then
-            xmllint --xpath '//File' build/reports/codenarc/main.xml | \
-            sed -nE 's/.*<File name="([^"]+)".*/\1/p' > file-names.txt
-          
-            xmllint --xpath '//Violation' build/reports/codenarc/main.xml | \
-            sed -nE 's/.*lineNumber="([^"]+)".*<Message><!\[CDATA\[(.*)\]\]><\/Message>.*/\1:\2/p' > violations.txt
+          # Decode the CodeNarc report
+          echo "${{ steps.run_codenarc.outputs.codenarc_report }}" | base64 -d > codenarc.xml
+
+          if [ -s codenarc.xml ]; then
+            xmllint --xpath '//File' codenarc.xml | sed -nE 's/.*<File name="([^"]+)".*/\1/p' > file-names.txt
+            xmllint --xpath '//Violation' codenarc.xml | sed -nE 's/.*lineNumber="([^"]+)".*<Message><!\[CDATA\[(.*)\]\]><\/Message>.*/\1:\2/p' > violations.txt
           
             paste -d ":" file-names.txt violations.txt > codenarc-violations.txt || true
           else
             touch codenarc-violations.txt
           fi
 
-          # Filter violations to only include changed files
-          grep -Ff changed_files.txt codenarc-violations.txt > filtered-violations.txt || true
+          echo "${{ steps.changed_files.outputs.all_changed_files }}" | tr ' ' '\n' > changed_files_list.txt
 
-          # Store violations content as output
+          grep -Ff changed_files_list.txt codenarc-violations.txt > filtered-violations.txt || true
+
           violations_content=$(cat filtered-violations.txt | base64 -w 0 || echo "")
-          echo "violations-content=${violations_content}" >> "$GITHUB_ENV"
+          echo "violations-content=${violations_content}" >> $GITHUB_ENV
+          echo "violations-content=${violations_content}" >> $GITHUB_OUTPUT
 
       - name: Comment on PR with Violations or Success
         uses: actions/github-script@v7
         env:
-          VIOLATIONS: ${{ env.violations-content }}
+          VIOLATIONS: ${{ steps.parse_violations.outputs.violations-content }}
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |

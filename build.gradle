@@ -111,7 +111,7 @@ jacocoTestReport {
 
 codenarc {
     version = ""
-    reportFormat = 'xml'
+    reportFormat = 'html'
     configFile = file('config/codenarc/StarterRuleSet-AllRulesByCategory.groovy')
 //    configFile = file('config/codenarc/DryRuleSet.groovy')
 }
@@ -135,6 +135,10 @@ tasks.named('codenarcMain') {
 }
 
 codenarcMain {
+    if (project.hasProperty('codenarcIncludeFiles')) {
+        def includeFiles = project.files(codenarcIncludeFiles.split(','))
+        source = includeFiles
+    }
     compilationClasspath = sourceSets.main.compileClasspath + sourceSets.main.output
 }
 
