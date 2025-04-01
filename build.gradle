@@ -111,7 +111,7 @@ jacocoTestReport {
 
 codenarc {
     version = ""
-    reportFormat = 'html'
+    reportFormat = 'xml'
     configFile = file('config/codenarc/StarterRuleSet-AllRulesByCategory.groovy')
 //    configFile = file('config/codenarc/DryRuleSet.groovy')
 }
