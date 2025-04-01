@@ -87,42 +87,57 @@ jobs:
             const fs = require('fs');
             const { owner, repo } = context.repo;
             const prNumber = context.payload.pull_request.number;
-
+            
+            console.log('Checking for violations file:', process.env.VIOLATIONS_FILE);
+            
             let violations = [];
             if (fs.existsSync(process.env.VIOLATIONS_FILE)) {
+              console.log('Violations file found. Reading file content...');
               violations = fs.readFileSync(process.env.VIOLATIONS_FILE, 'utf8').split('\n').filter(Boolean);
+              console.log(`Found ${violations.length} violation(s).`);
+            } else {
+              console.log('Violations file does not exist.');
             }
-
+            
             if (violations.length > 0) {
+              console.log('Processing violations...');
               let comments = [];
               for (const violation of violations) {
+                console.log('Processing violation:', violation);
                 const parts = violation.split(":");
                 if (parts.length >= 3) {
                   const [file, line, ...messageParts] = parts;
                   const message = messageParts.join(":").trim();
-
+                  console.log(`Violation details - File: ${file}, Line: ${line}, Message: ${message}`);
+            
                   comments.push({
                     path: file,
                     line: parseInt(line, 10),
                     body: `⚠️ **CodeNarc Warning:** ${message}`
                   });
+                } else {
+                  console.log('Skipping invalid violation format:', violation);
                 }
               }
-
+            
               if (comments.length > 0) {
-                github.rest.pulls.createReview({
+                console.log('Creating review with comments...');
+                await github.rest.pulls.createReview({
                   owner,
                   repo,
                   pull_number: prNumber,
                   event: "COMMENT",
                   comments
                 });
+                console.log('Review created with comments.');
               }
             } else {
-              github.rest.issues.createComment({
+              console.log('No violations found. Posting success message...');
+              await github.rest.issues.createComment({
                 owner,
                 repo,
                 issue_number: prNumber,
                 body: "✅ **CodeNarc Check Passed!** No issues detected."
               });
+              console.log('Success message posted.');
             }
