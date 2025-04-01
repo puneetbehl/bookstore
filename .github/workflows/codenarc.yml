@@ -12,9 +12,6 @@ jobs:
     permissions:
       pull-requests: write
 
-    outputs:
-      codenarc_report: ${{ steps.run_codenarc.outputs.codenarc_report }}
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -48,7 +45,6 @@ jobs:
           changed_files=$(echo "${{ steps.changed_files.outputs.all_changed_files }}" | tr ' ' ',')
           echo "Files being analyzed: $changed_files"
 
-
       - name: Run CodeNarc on Changed Files
         id: run_codenarc
         if: env.skip != 'true'
@@ -56,50 +52,46 @@ jobs:
         run: |
           changed_files=$(echo "${{ steps.changed_files.outputs.all_changed_files }}" | tr ' ' ',')
           ./gradlew codenarcMain -PcodenarcIncludeFiles="$changed_files" || echo "CodeNarc failed, continuing execution"
-          
-          if [ -f build/reports/codenarc/main.xml ]; then
-            codenarc_report=$(base64 -w 0 build/reports/codenarc/main.xml || echo "")
-            echo "codenarc_report=${codenarc_report}" >> $GITHUB_ENV
-            echo "codenarc_report=${codenarc_report}" >> $GITHUB_OUTPUT
-          else
-            echo "codenarc_report=" >> $GITHUB_ENV
-            echo "codenarc_report=" >> $GITHUB_OUTPUT
-          fi
 
       - name: Parse CodeNarc Violations
         id: parse_violations
         if: env.skip != 'true'
         run: |
-          # Decode the CodeNarc report
-          echo "${{ steps.run_codenarc.outputs.codenarc_report }}" | base64 -d > codenarc.xml
-
-          if [ -s codenarc.xml ]; then
-            xmllint --xpath '//File' codenarc.xml | sed -nE 's/.*<File name="([^"]+)".*/\1/p' > file-names.txt
-            xmllint --xpath '//Violation' codenarc.xml | sed -nE 's/.*lineNumber="([^"]+)".*<Message><!\[CDATA\[(.*)\]\]><\/Message>.*/\1:\2/p' > violations.txt
+          # Debug log to verify main.xml existence
+          if [ -f build/reports/codenarc/main.xml ]; then
+            echo "main.xml exists, proceeding with parsing."
+          else
+            echo "Error: main.xml does not exist!" && exit 1
+          fi
+          
+          if [ -s build/reports/codenarc/main.xml ]; then
+            xmllint --xpath '//File' build/reports/codenarc/main.xml | sed -nE 's/.*<File name="([^"]+)".*/\1/p' > file-names.txt
+            xmllint --xpath '//Violation' build/reports/codenarc/main.xml | sed -nE 's/.*lineNumber="([^"]+)".*<Message><!\[CDATA\[(.*)\]\]><\/Message>.*/\1:\2/p' > violations.txt
           
             paste -d ":" file-names.txt violations.txt > codenarc-violations.txt || true
           else
             touch codenarc-violations.txt
           fi
-
+          
           echo "${{ steps.changed_files.outputs.all_changed_files }}" | tr ' ' '\n' > changed_files_list.txt
-
+          
           grep -Ff changed_files_list.txt codenarc-violations.txt > filtered-violations.txt || true
-
-          violations_content=$(cat filtered-violations.txt | base64 -w 0 || echo "")
-          echo "violations-content=${violations_content}" >> $GITHUB_ENV
-          echo "violations-content=${violations_content}" >> $GITHUB_OUTPUT
 
       - name: Comment on PR with Violations or Success
         uses: actions/github-script@v7
         env:
-          VIOLATIONS: ${{ steps.parse_violations.outputs.violations-content }}
+          VIOLATIONS_FILE: ${{ github.workspace }}/filtered-violations.txt
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
+            const fs = require('fs');
             const { owner, repo } = context.repo;
             const prNumber = context.payload.pull_request.number;
-            const violations = Buffer.from(process.env.VIOLATIONS, 'base64').toString('utf8').split('\n').filter(Boolean);
+
+            let violations = [];
+            if (fs.existsSync(process.env.VIOLATIONS_FILE)) {
+              violations = fs.readFileSync(process.env.VIOLATIONS_FILE, 'utf8').split('\n').filter(Boolean);
+            }
 
             if (violations.length > 0) {
               let comments = [];
